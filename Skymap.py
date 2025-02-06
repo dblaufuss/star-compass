@@ -14,7 +14,11 @@ eph = load("de421.bsp")
 with load.open(hipparcos.URL) as f:
     stars = hipparcos.load_dataframe(f)
 
-location = Sensors.get_location("ws://localhost:8080")
+server = "ws://localhost:8080"
+location = Sensors.get_location(server)
+heading = Sensors.get_orientation(server)
+print("HEADING:", heading["values"])
+
 lat = location["latitude"]
 lon = location["longitude"]
 print("LATITUDE:", lat)
@@ -31,14 +35,14 @@ sun = eph['sun']
 earth = eph['earth']
 
 observer = wgs84.latlon(latitude_degrees=lat, longitude_degrees=lon).at(t)
-position = observer.from_altaz(alt_degrees=90, az_degrees=0)
+position = observer.from_altaz(alt_degrees=90, az_degrees=heading["values"][0])
 
 ra, dec, distance = observer.radec()
 center_object = Star(ra=ra, dec=dec)
 
 center = earth.at(t).observe(center_object)
 projection = build_stereographic_projection(center)
-field_of_view_degrees = 180.0
+field_of_view_degrees = 180
 
 star_positions = earth.at(t).observe(Star.from_dataframe(stars))
 stars['x'], stars['y'] = projection(star_positions)
