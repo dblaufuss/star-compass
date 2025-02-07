@@ -1,76 +1,58 @@
-from datetime import datetime, timezone
-import pytz
-import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.collections import LineCollection
-from matplotlib.patches import Circle
-from skyfield.api import Star, load, wgs84
+from skyfield.api import load
 from skyfield.data import hipparcos
-from skyfield.projections import build_stereographic_projection
-import Sensors
+from astropy.coordinates import *
+from astropy.time import Time
+import astropy.units as u
+import matplotlib.pyplot as plt
+from matplotlib.patches import Circle
+import numpy as np
 
-eph = load("de421.bsp")
+time = Time.now()
+sun = get_sun(time)
+
+observer = EarthLocation(lat=38.9864*u.deg, lon=-76.8657*u.deg)
+
+sun_coord = SkyCoord(sun.ra, sun.dec)
+
+test_coord = SkyCoord(320.69621276, -15.35417026, unit=u.deg)
+
 
 with load.open(hipparcos.URL) as f:
     stars = hipparcos.load_dataframe(f)
 
-server = "ws://localhost:8080"
-location = Sensors.get_location(server)
-heading = Sensors.get_orientation(server)
-print("HEADING:", heading["values"])
+stars_mag = []
+stars_alt = []
+stars_az = []
 
-lat = location["latitude"]
-lon = location["longitude"]
-print("LATITUDE:", lat)
-print("LONGITUDE:", lon)
+for index, star in stars.iterrows():
+    if star["magnitude"] >= 3.5:
+        continue
 
-local_time = datetime.now()
-utc_time = local_time.astimezone(pytz.utc)
-ts = load.timescale()
-t = ts.from_datetime(utc_time)
-print("\nLOCAL TIME:", local_time)
-print("UTC TIME:", utc_time)
+    altaz = SkyCoord(star["ra_degrees"], star["dec_degrees"], unit=u.deg).transform_to(AltAz(location=observer, obstime=time))
+    alt = float((altaz.alt*u.deg).value)
+    az = float((altaz.az*u.deg).value)
 
-sun = eph['sun']
-earth = eph['earth']
+    if alt < 0:
+        continue
 
-observer = wgs84.latlon(latitude_degrees=lat, longitude_degrees=lon).at(t)
-position = observer.from_altaz(alt_degrees=90, az_degrees=heading["values"][0])
+    stars_mag.append(star["magnitude"])
+    stars_alt.append(alt)
+    stars_az.append(az)
 
-ra, dec, distance = observer.radec()
-center_object = Star(ra=ra, dec=dec)
+fig, ax = plt.subplots(subplot_kw=dict(projection='polar'))
 
-center = earth.at(t).observe(center_object)
-projection = build_stereographic_projection(center)
-field_of_view_degrees = 180
+circle = plt.Circle((0, 0), 1, transform=ax.transData._b, color="black")
+ax.add_artist(circle)
 
-star_positions = earth.at(t).observe(Star.from_dataframe(stars))
-stars['x'], stars['y'] = projection(star_positions)
+ax.scatter(
+    stars_az,
+    np.tan(np.pi/4 - np.deg2rad(np.array(stars_alt))/2),
+    s=100 * 10 ** (np.array(stars_mag) / -2.5),
+    c="white",
+    marker=".",
+    linewidths=0,
+    zorder=2
+)
 
-chart_size = 10
-max_star_size = 100
-limiting_magnitude = 10
-
-bright_stars = (stars.magnitude <= limiting_magnitude)
-magnitude = stars['magnitude'][bright_stars]
-
-fig, ax = plt.subplots(figsize=(chart_size, chart_size))
-    
-border = plt.Circle((0, 0), 1, color='black', fill=True)
-ax.add_patch(border)
-
-marker_size = max_star_size * 10 ** (magnitude / -2.5)
-
-ax.scatter(stars['x'][bright_stars], stars['y'][bright_stars],
-           s=marker_size, color='white', marker='.', linewidths=0, 
-           zorder=2)
-
-horizon = Circle((0, 0), radius=1, transform=ax.transData)
-for col in ax.collections:
-    col.set_clip_path(horizon)
-
-ax.set_xlim(-1, 1)
-ax.set_ylim(-1, 1)
 plt.axis('off')
-
 plt.show()
