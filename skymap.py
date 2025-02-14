@@ -13,7 +13,10 @@ def get_stars(time: Time, location: EarthLocation) -> np.array:
     data = [[],[],[]]
 
     for index, star in stars_raw.iterrows():
-        if star["magnitude"] > 3:
+        if star["magnitude"] > 4.5 or np.isnan(star["magnitude"]):
+            continue
+
+        if np.isnan(star["ra_degrees"]) or np.isnan(star["dec_degrees"]):
             continue
 
         altaz = SkyCoord(
@@ -28,17 +31,24 @@ def get_stars(time: Time, location: EarthLocation) -> np.array:
         if alt < 0:
             continue
 
-        data[0].append(star["magnitude"])
+        if star["magnitude"] < 0:
+            data[0].append(0)
+        else:
+            data[0].append(star["magnitude"])
+        
         data[1].append(alt)
         data[2].append(az)
 
     return np.array(data)
 
-utcoffset = -4 * u.hour #EST
-#time = Time.now() - utcoffset
-t = Time(f"2025-2-7 00:00:00") - utcoffset
+# utcoffset = -4 * u.hour #EST
+# t = Time(f"2025-2-7 00:00:00") - utcoffset
+
+t = Time.now()
+
 observer = EarthLocation(lat=38.9864 * u.deg, lon=-76.8657 * u.deg, height=60)
 stars = get_stars(t, observer)
+np.savetxt("stars.txt", stars)
 
 fig, ax = plt.subplots(subplot_kw=dict(projection='polar'))
 circle = plt.Circle((0, 0), 1, transform=ax.transData._b, color="black")
@@ -50,12 +60,14 @@ ax.set_xticklabels([])
 ax.set_yticklabels([])
 
 ax.scatter(
-    stars[2],
+    np.deg2rad(stars[2])+np.pi/2,
     np.tan(np.pi / 4 - np.deg2rad(stars[1]) / 2),
-    s=100 * 10 ** (stars[0] / -2.512),
+    s=40 * 5 ** (stars[0] / -2.512),
     c="white",
-    marker  =".",
+    marker=".",
     linewidths=0,
+    alpha=1-0.8*(stars[0]/4.5),
     zorder=2
 )
+plt.savefig("chart.png", dpi=1000)
 plt.show()
