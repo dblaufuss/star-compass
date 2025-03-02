@@ -5,9 +5,11 @@ from astropy.time import Time
 import astropy.units as u
 import matplotlib.pyplot as plt
 import numpy as np
+import time
 
 MAX_MAGNITUDE = 4.5
-MIN_ALTITUDE = 0
+CAM_FOV = 104.1
+MIN_ALTITUDE = (180-CAM_FOV)/2
 
 def get_stars(time: Time, location: EarthLocation) -> np.array:
     with load.open(hipparcos.URL) as f:
@@ -61,7 +63,7 @@ def get_bodies(time: Time, location: EarthLocation) -> np.array:
         alt = float((altaz.alt*u.deg).value)
         az = float((altaz.az*u.deg).value)
 
-        if alt < 0:
+        if alt < MIN_ALTITUDE:
             continue
         
         data[0].append(magnitude)
@@ -70,29 +72,31 @@ def get_bodies(time: Time, location: EarthLocation) -> np.array:
 
     return np.array(data)
 
+utcoffset = time.timezone * u.second
+t = Time(f"2025-2-21 22:35:40") + utcoffset
+#t = Time.now()
 
-#utcoffset = -4 * u.hour #EST
-#t = Time(f"2025-2-14 19:38:01") - utcoffset
-t = Time.now()
-
-observer = EarthLocation(lat=39.006543*u.deg, lon=-76.866053*u.deg, height=60)
+observer = EarthLocation(lat=38.911262702627, lon=-78.88359672603178, height=100)
+#observer = EarthLocation(lat=39.006543*u.deg, lon=-76.866053*u.deg, height=60)
 
 stars = get_stars(t, observer)
 bodies = get_bodies(t, observer)
 
+MAX_RADIUS = np.tan(np.pi/4 - np.deg2rad(MIN_ALTITUDE)/2)
+
 fig, ax = plt.subplots(subplot_kw=dict(projection="polar"))
-circle = plt.Circle((0, 0), 1, transform=ax.transData._b, color="black")
+circle = plt.Circle((0, 0), MAX_RADIUS, transform=ax.transData._b, color="black")
 ax.add_artist(circle)
 
 ax.grid(False)
-ax.set_ylim(0,1)
+ax.set_ylim(0, MAX_RADIUS)
 ax.set_xticklabels([])
 ax.set_yticklabels([])
 
 ax.scatter(
     np.deg2rad(stars[2])+np.pi/2,
     np.tan(np.pi / 4 - np.deg2rad(stars[1]) / 2),
-    s=20 * 1 ** (stars[0] / -2.512),
+    s=5 * 1 ** (stars[0] / -2.512),
     c="white",
     marker=".",
     linewidths=0,
@@ -103,13 +107,14 @@ ax.scatter(
 ax.scatter(
     np.deg2rad(bodies[2])+np.pi/2,
     np.tan(np.pi / 4 - np.deg2rad(bodies[1]) / 2),
-    s=40 * 2 ** (bodies[0] / -2.512),
+    s=5 * 2 ** (bodies[0] / -2.512),
     c="red",
     marker=".",
     linewidths=0,
     zorder=2
 )
 
+#ax.set_title(f"{t}\nLAT {round(observer.lat.value, 4)}°, LON {round(observer.lon.value, 4)}°\nSIMULATED FOV: {CAM_FOV}°")
 plt.tight_layout()
-plt.savefig("chart.png")
+plt.savefig("chart.png", dpi=1000)
 plt.show()
