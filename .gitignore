@@ -1,4 +1,8 @@
-de421.bsp
 hip_main.dat
 __pycache__/
-.idea/
+out/
+*png
+venv/
+images/
+*json
+test.py
